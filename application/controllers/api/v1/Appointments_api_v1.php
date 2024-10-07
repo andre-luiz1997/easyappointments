@@ -30,6 +30,7 @@ class Appointments_api_v1 extends EA_Controller
         $this->load->model('providers_model');
         $this->load->model('services_model');
         $this->load->model('settings_model');
+        $this->load->model('blocked_periods_model');
 
         $this->load->library('api');
         $this->load->library('synchronization');
@@ -373,6 +374,170 @@ class Appointments_api_v1 extends EA_Controller
             );
 
             response('', 204);
+        } catch (Throwable $e) {
+            json_exception($e);
+        }
+    }
+
+    /**
+     * Get the registered appointments for the given date period and record.
+     *
+     * This method returns the database appointments and unavailability periods for the user selected date period and
+     * record type (provider or service).
+     */
+    public function get_calendar_appointments(): void
+    {
+        try {
+            $record_id = request('record_id');
+
+            $is_all = request('record_id') === FILTER_TYPE_ALL;
+
+            $filter_type = request('filter_type');
+
+            if (!$filter_type && !$is_all) {
+                json_response([
+                    'appointments' => [],
+                    'unavailabilities' => [],
+                ]);
+
+                return;
+            }
+
+            $record_id = $this->db->escape($record_id);
+
+            if ($filter_type == FILTER_TYPE_PROVIDER) {
+                $where_id = 'id_users_provider';
+            } elseif ($filter_type === FILTER_TYPE_SERVICE) {
+                $where_id = 'id_services';
+            } else {
+                $where_id = $record_id;
+            }
+
+            // Get appointments
+            $start_date = $this->db->escape(request('start_date'));
+            $end_date = $this->db->escape(date('Y-m-d', strtotime(request('end_date') . ' +1 day')));
+
+            $where_clause =
+                $where_id .
+                ' = ' .
+                $record_id .
+                '
+                AND ((start_datetime > ' .
+                $start_date .
+                ' AND start_datetime < ' .
+                $end_date .
+                ') 
+                or (end_datetime > ' .
+                $start_date .
+                ' AND end_datetime < ' .
+                $end_date .
+                ') 
+                or (start_datetime <= ' .
+                $start_date .
+                ' AND end_datetime >= ' .
+                $end_date .
+                ')) 
+                AND is_unavailability = 0
+            ';
+
+            $response['appointments'] = $this->appointments_model->get($where_clause);
+
+            foreach ($response['appointments'] as &$appointment) {
+                $appointment['provider'] = $this->providers_model->find($appointment['id_users_provider']);
+                $appointment['service'] = $this->services_model->find($appointment['id_services']);
+                $appointment['customer'] = $this->customers_model->find($appointment['id_users_customer']);
+            }
+
+            unset($appointment);
+
+            // Get unavailability periods (only for provider).
+            $response['unavailabilities'] = [];
+
+            if ($filter_type == FILTER_TYPE_PROVIDER || $is_all) {
+                $where_clause =
+                    $where_id .
+                    ' = ' .
+                    $record_id .
+                    '
+                    AND ((start_datetime > ' .
+                    $start_date .
+                    ' AND start_datetime < ' .
+                    $end_date .
+                    ') 
+                    or (end_datetime > ' .
+                    $start_date .
+                    ' AND end_datetime < ' .
+                    $end_date .
+                    ') 
+                    or (start_datetime <= ' .
+                    $start_date .
+                    ' AND end_datetime >= ' .
+                    $end_date .
+                    ')) 
+                    AND is_unavailability = 1
+                ';
+
+                $response['unavailabilities'] = $this->unavailabilities_model->get($where_clause);
+            }
+
+            $user_id = session('user_id');
+
+            $role_slug = session('role_slug');
+
+            // If the current user is a provider he must only see his own appointments.
+            if ($role_slug === DB_SLUG_PROVIDER) {
+                foreach ($response['appointments'] as $index => $appointment) {
+                    if ((int) $appointment['id_users_provider'] !== (int) $user_id) {
+                        unset($response['appointments'][$index]);
+                    }
+                }
+
+                $response['appointments'] = array_values($response['appointments']);
+
+                foreach ($response['unavailabilities'] as $index => $unavailability) {
+                    if ((int) $unavailability['id_users_provider'] !== (int) $user_id) {
+                        unset($response['unavailabilities'][$index]);
+                    }
+                }
+
+                unset($unavailability);
+
+                $response['unavailabilities'] = array_values($response['unavailabilities']);
+            }
+
+            // If the current user is a secretary he must only see the appointments of his providers.
+            if ($role_slug === DB_SLUG_SECRETARY) {
+                $providers = $this->secretaries_model->find($user_id)['providers'];
+
+                foreach ($response['appointments'] as $index => $appointment) {
+                    if (!in_array((int) $appointment['id_users_provider'], $providers)) {
+                        unset($response['appointments'][$index]);
+                    }
+                }
+
+                $response['appointments'] = array_values($response['appointments']);
+
+                foreach ($response['unavailabilities'] as $index => $unavailability) {
+                    if (!in_array((int) $unavailability['id_users_provider'], $providers)) {
+                        unset($response['unavailabilities'][$index]);
+                    }
+                }
+
+                $response['unavailabilities'] = array_values($response['unavailabilities']);
+            }
+
+            foreach ($response['unavailabilities'] as &$unavailability) {
+                $unavailability['provider'] = $this->providers_model->find($unavailability['id_users_provider']);
+            }
+
+            unset($unavailability);
+
+            // Add blocked periods to the response.
+            $start_date = request('start_date');
+            $end_date = request('end_date');
+            $response['blocked_periods'] = $this->blocked_periods_model->get_for_period($start_date, $end_date);
+
+            json_response($response);
         } catch (Throwable $e) {
             json_exception($e);
         }
