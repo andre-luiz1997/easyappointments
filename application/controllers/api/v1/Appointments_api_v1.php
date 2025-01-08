@@ -226,7 +226,7 @@ class Appointments_api_v1 extends EA_Controller
 
             $created_appointment = $this->appointments_model->find($appointment_id);
 
-            $this->notify_and_sync_appointment($created_appointment);
+            // $this->notify_and_sync_appointment($created_appointment);
 
             $this->appointments_model->api_encode($created_appointment);
 
@@ -318,7 +318,7 @@ class Appointments_api_v1 extends EA_Controller
 
             $updated_appointment = $this->appointments_model->find($appointment_id);
 
-            $this->notify_and_sync_appointment($updated_appointment, 'update');
+            // $this->notify_and_sync_appointment($updated_appointment, 'update');
 
             $this->appointments_model->api_encode($updated_appointment);
 
