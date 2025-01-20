@@ -205,6 +205,40 @@ class Appointments_api_v1 extends EA_Controller
     }
 
     /**
+     * Stores many new appointments at once.
+     */
+    public function store_many(): void
+    {
+        try {
+            $appointment = request();
+            $this->appointments_model->api_decode($appointment);
+            $datetimes = array();
+
+            if (array_key_exists('datetimes', request())) {
+                $datetimes = request('datetimes');
+            } else {
+                throw new ErrorException('The "datetimes" field is required.');
+            }
+            $response = array();
+            for ($i = 0; $i < $datetimes; $i++) {
+                $datetime = $datetimes[$i];
+                $appointment['start_datetime'] = $datetime["start"];
+                $appointment['end_datetime'] = $datetime["end"];
+                $appointment['status'] = $datetime["status"];
+                $appointment_id = $this->appointments_model->save($appointment);
+                $created_appointment = $this->appointments_model->find($appointment_id);
+                $this->appointments_model->api_encode($created_appointment);
+                $created_appointment["extras"] = $datetime["extras"];
+                $response[] = $created_appointment;
+            }
+
+            json_response($response, 201);
+        } catch (Throwable $e) {
+            json_exception($e);
+        }
+    }
+
+    /**
      * Store a new appointment.
      */
     public function store(): void
@@ -329,6 +363,37 @@ class Appointments_api_v1 extends EA_Controller
     }
 
     /**
+     * Delete many appointments at once.
+     *
+     * @param int[] $ids Appointment IDs.
+     */
+    public function destroy_many(array $ids): void
+    {
+        try {
+            $idArray = explode(",",$ids);
+            $idArray = array_filter($idArray, 'is_numeric');
+            if (empty($idArray)) {
+                response('', 404);
+
+                return;
+            }
+            $errors = [];
+            for ($i = 0; $i < $idArray; $i++) {
+                $res = $this->remove($idArray[$i]);
+                if (!$res) {
+                    $errors[] = $idArray[$i];
+                }
+            }
+
+            json_response(array("errors" => $errors), 204);
+        } catch (Throwable $e) {
+            json_exception($e);
+        }
+    }
+
+
+
+    /**
      * Delete an appointment.
      *
      * @param int $id Appointment ID.
@@ -342,6 +407,31 @@ class Appointments_api_v1 extends EA_Controller
                 response('', 404);
 
                 return;
+            }
+
+            $res = $this->remove($id);
+            if ($res) {
+                response('', 204);
+            } else {
+                response('', 500);
+            }
+        } catch (Throwable $e) {
+            json_exception($e);
+        }
+    }
+
+    /**
+     * Util to delete an appointment from database.
+     *
+     * @param int $id Appointment ID.
+     */
+    private function remove(int $id): bool
+    {
+        try {
+            $occurrences = $this->appointments_model->get(['id' => $id]);
+
+            if (empty($occurrences)) {
+                return false;
             }
 
             $deleted_appointment = $occurrences[0];
@@ -372,9 +462,9 @@ class Appointments_api_v1 extends EA_Controller
                 $settings,
             );
 
-            response('', 204);
-        } catch (Throwable $e) {
-            json_exception($e);
+            return true;
+        } catch (\Throwable $th) {
+            return false;
         }
     }
 }
