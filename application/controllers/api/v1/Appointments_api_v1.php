@@ -212,15 +212,20 @@ class Appointments_api_v1 extends EA_Controller
         try {
             $appointment = request();
             $this->appointments_model->api_decode($appointment);
-            $datetimes = array();
+            $datetimes = [];
 
             if (array_key_exists('datetimes', request())) {
                 $datetimes = request('datetimes');
+                if(!is_array($datetimes)) {
+                    $datetimes = json_decode($datetimes,true);
+                    if(!$datetimes) throw new ErrorException('The "datetimes" field is required.');
+                }
             } else {
                 throw new ErrorException('The "datetimes" field is required.');
             }
-            $response = array();
-            for ($i = 0; $i < $datetimes; $i++) {
+            $response = [];
+            $count = count($datetimes);
+            for ($i = 0; $i < $count; $i++) {
                 $datetime = $datetimes[$i];
                 $appointment['start_datetime'] = $datetime["start"];
                 $appointment['end_datetime'] = $datetime["end"];
@@ -378,7 +383,8 @@ class Appointments_api_v1 extends EA_Controller
                 return;
             }
             $errors = [];
-            for ($i = 0; $i < $idArray; $i++) {
+            $count = count($idArray);
+            for ($i = 0; $i < $count; $i++) {
                 $res = $this->remove($idArray[$i]);
                 if (!$res) {
                     $errors[] = $idArray[$i];
