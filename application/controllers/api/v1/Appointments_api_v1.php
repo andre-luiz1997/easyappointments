@@ -216,9 +216,10 @@ class Appointments_api_v1 extends EA_Controller
 
             if (array_key_exists('datetimes', request())) {
                 $datetimes = request('datetimes');
-                if(!is_array($datetimes)) {
-                    $datetimes = json_decode($datetimes,true);
-                    if(!$datetimes) throw new ErrorException('The "datetimes" field is required.');
+                if (!is_array($datetimes)) {
+                    $datetimes = json_decode($datetimes, true);
+                    if (!$datetimes)
+                        throw new ErrorException('The "datetimes" field is required.');
                 }
             } else {
                 throw new ErrorException('The "datetimes" field is required.');
@@ -227,10 +228,29 @@ class Appointments_api_v1 extends EA_Controller
             $count = count($datetimes);
             for ($i = 0; $i < $count; $i++) {
                 $datetime = $datetimes[$i];
-                $appointment['start_datetime'] = $datetime["start"];
-                $appointment['end_datetime'] = $datetime["end"];
-                $appointment['status'] = $datetime["status"];
-                $appointment_id = $this->appointments_model->save($appointment);
+                $save_data = array(
+                    'start_datetime' => $datetime["start"],
+                    'end_datetime' => $datetime["end"],
+                    'status' => $datetime["status"],
+                    'id_services' => $appointment['id_services'],
+                    'id_users_provider' => $appointment['id_users_provider'],
+                    'id_users_customer' => $appointment['id_users_customer'],
+                    'is_unavailability' => $appointment["is_unavailability"],
+                    'id_google_calendar' => $appointment["id_google_calendar"],
+                    'id_caldav_calendar' => $appointment["id_caldav_calendar"],
+                    'notes' => $appointment["notes"],
+                    'location' => $appointment["location"],
+                    'hash' => $appointment["hash"],
+                    'book_datetime' => $appointment["book_datetime"],
+                );
+                if (!array_key_exists('end', $datetime)) {
+                    $save_data['end_datetime'] = $this->calculate_end_datetime(array(
+                        'id_services' => $appointment['id_services'],
+                        'start_datetime' => $datetime["start"],
+                    ));
+                }
+
+                $appointment_id = $this->appointments_model->save($save_data);
                 $created_appointment = $this->appointments_model->find($appointment_id);
                 $this->appointments_model->api_encode($created_appointment);
                 $created_appointment["extras"] = $datetime["extras"];
@@ -375,7 +395,7 @@ class Appointments_api_v1 extends EA_Controller
     public function destroy_many(array $ids): void
     {
         try {
-            $idArray = explode(",",$ids);
+            $idArray = explode(",", $ids);
             $idArray = array_filter($idArray, 'is_numeric');
             if (empty($idArray)) {
                 response('', 404);
