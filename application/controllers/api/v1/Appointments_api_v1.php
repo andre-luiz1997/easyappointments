@@ -387,12 +387,40 @@ class Appointments_api_v1 extends EA_Controller
         }
     }
 
+    public function confirm_many(string $ids): void 
+    {
+        try {
+            $idArray = explode(",", $ids);
+            $idArray = array_filter($idArray, 'is_numeric');
+            if (empty($idArray)) {
+                response('', 404);
+
+                return;
+            }
+            $confirmed = [];
+            $count = count($idArray);
+            for ($i = 0; $i < $count; $i++) {
+                $appointment = $this->appointments_model->find($idArray[$i]);
+                if(!$appointment) continue;
+                $appointment['status'] = "confirmed";
+                $appointment_id = $this->appointments_model->save($appointment);
+                if ($appointment_id) {
+                    $confirmed[] = $idArray[$i];
+                }
+            }
+
+            json_response(array("confirmed_ids" => $confirmed), 204);
+        } catch (Throwable $e) {
+            json_exception($e);
+        }
+    }
+
     /**
      * Delete many appointments at once.
      *
      * @param int[] $ids Appointment IDs.
      */
-    public function destroy_many(array $ids): void
+    public function destroy_many(string $ids): void
     {
         try {
             $idArray = explode(",", $ids);
