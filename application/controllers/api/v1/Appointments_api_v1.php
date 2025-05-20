@@ -387,6 +387,32 @@ class Appointments_api_v1 extends EA_Controller
         }
     }
 
+    public function change_many_appointments_agenda($provider_id, string $ids): void {
+        try {
+            $idArray = explode(",", $ids);
+            $idArray = array_filter($idArray, 'is_numeric');
+            if (empty($idArray)) {
+                response('', 404);
+                return;
+            }
+            $confirmed = [];
+            $count = count($idArray);
+            for ($i = 0; $i < $count; $i++) {
+                $appointment = $this->appointments_model->find($idArray[$i]);
+                if(!$appointment) continue;
+                $appointment['id_users_provider'] = intval($provider_id);
+                $appointment_id = $this->appointments_model->save($appointment);
+                if ($appointment_id) {
+                    $confirmed[] = $idArray[$i];
+                }
+            }
+
+            json_response(array("updated_ids" => $confirmed), 204);
+        } catch (Throwable $e) {
+            json_exception($e);
+        }
+    }
+
     public function confirm_many(string $ids): void 
     {
         try {

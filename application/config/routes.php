@@ -126,6 +126,7 @@ if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS
 
 $route['api/v1/appointments/many']['post'] = 'api/v1/appointments_api_v1/store_many';
 $route['api/v1/appointments/confirm_many/(:any)']['post'] = 'api/v1/appointments_api_v1/confirm_many/$1';
+$route['api/v1/appointments/change_many_appointments_agenda/(:any)/(:any)']['post'] = 'api/v1/appointments_api_v1/change_many_appointments_agenda/$1/$2';
 
 $route['api/v1/appointments/many/(:any)']['delete'] = 'api/v1/appointments_api_v1/destroy_many/$1';
 
