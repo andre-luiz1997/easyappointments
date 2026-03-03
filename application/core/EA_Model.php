@@ -105,7 +105,7 @@ class EA_Model extends CI_Model
      *
      * @return array Returns an array of records.
      */
-    public function get_batch($where = null, int $limit = null, int $offset = null, string $order_by = null): array
+    public function get_batch($where = null, ?int $limit = null, ?int $offset = null, ?string $order_by = null): array
     {
         return $this->get($where, $limit, $offset, $order_by);
     }
@@ -189,12 +189,12 @@ class EA_Model extends CI_Model
     {
         if (is_assoc($record)) {
             foreach ($fields as $field => $default) {
-                $record[$field] = $record[$field] ?? $default;
+                $record[$field] = $record[$field] ?? null ?: $default;
             }
         } else {
             foreach ($record as &$record_item) {
                 foreach ($fields as $field => $default) {
-                    $record_item[$field] = $record_item[$field] ?? $default;
+                    $record_item[$field] = $record_item[$field] ?? null ?: $default;
                 }
             }
         }
@@ -210,5 +210,35 @@ class EA_Model extends CI_Model
     public function db_field(string $api_field): ?string
     {
         return $this->api_resource[$api_field] ?? null;
+    }
+
+    /**
+     * Escape the order by statements in order to avoid SQL injection issues
+     *
+     * @param string $order_by
+     *
+     * @return string
+     */
+    function quote_order_by(string $order_by): string
+    {
+        $parts = explode(',', $order_by);
+        $quoted_parts = [];
+
+        foreach ($parts as $part) {
+            $tokens = preg_split('/\s+/', trim($part));
+            $column = array_shift($tokens); // first token is column
+            $direction = strtoupper($tokens[0] ?? ''); // optional ASC/DESC
+
+            // Add backticks (or quotes) around column name
+            $column = '`' . str_replace('`', '', $column) . '`';
+
+            if ($direction === 'ASC' || $direction === 'DESC') {
+                $quoted_parts[] = $column . ' ' . $direction;
+            } else {
+                $quoted_parts[] = $column;
+            }
+        }
+
+        return implode(', ', $quoted_parts);
     }
 }

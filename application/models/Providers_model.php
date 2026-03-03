@@ -182,7 +182,7 @@ class Providers_model extends EA_Model
      *
      * @return bool Returns the validation result.
      */
-    public function validate_username(string $username, int $provider_id = null): bool
+    public function validate_username(string $username, ?int $provider_id = null): bool
     {
         if (!empty($provider_id)) {
             $this->db->where('id_users !=', $provider_id);
@@ -207,10 +207,10 @@ class Providers_model extends EA_Model
      * @return array Returns an array of providers.
      */
     public function get(
-        array|string $where = null,
-        int $limit = null,
-        int $offset = null,
-        string $order_by = null,
+        array|string|null $where = null,
+        ?int $limit = null,
+        ?int $offset = null,
+        ?string $order_by = null,
     ): array {
         $role_id = $this->get_provider_role_id();
 
@@ -219,7 +219,7 @@ class Providers_model extends EA_Model
         }
 
         if ($order_by !== null) {
-            $this->db->order_by($order_by);
+            $this->db->order_by($this->quote_order_by($order_by));
         }
 
         $providers = $this->db->get_where('users', ['id_roles' => $role_id], $limit, $offset)->result_array();
@@ -247,6 +247,42 @@ class Providers_model extends EA_Model
         }
 
         return $role['id'];
+    }
+
+    /**
+     * Get the provider settings.
+     *
+     * @param int $provider_id Provider ID.
+     *
+     * @throws InvalidArgumentException
+     */
+    public function get_settings(int $provider_id): array
+    {
+        $settings = $this->db->get_where('user_settings', ['id_users' => $provider_id])->row_array();
+
+        unset($settings['id_users'], $settings['password'], $settings['salt']);
+
+        return $settings;
+    }
+
+    /**
+     * Get the provider service IDs.
+     *
+     * @param int $provider_id Provider ID.
+     */
+    public function get_service_ids(int $provider_id): array
+    {
+        $service_provider_connections = $this->db
+            ->get_where('services_providers', ['id_users' => $provider_id])
+            ->result_array();
+
+        $service_ids = [];
+
+        foreach ($service_provider_connections as $service_provider_connection) {
+            $service_ids[] = (int) $service_provider_connection['id_services'];
+        }
+
+        return $service_ids;
     }
 
     /**
@@ -321,22 +357,6 @@ class Providers_model extends EA_Model
 
             $this->set_setting($provider_id, $name, $value);
         }
-    }
-
-    /**
-     * Get the provider settings.
-     *
-     * @param int $provider_id Provider ID.
-     *
-     * @throws InvalidArgumentException
-     */
-    public function get_settings(int $provider_id): array
-    {
-        $settings = $this->db->get_where('user_settings', ['id_users' => $provider_id])->row_array();
-
-        unset($settings['id_users'], $settings['password'], $settings['salt']);
-
-        return $settings;
     }
 
     /**
@@ -415,26 +435,6 @@ class Providers_model extends EA_Model
 
             $this->db->insert('services_providers', $service_provider_connection);
         }
-    }
-
-    /**
-     * Get the provider service IDs.
-     *
-     * @param int $provider_id Provider ID.
-     */
-    public function get_service_ids(int $provider_id): array
-    {
-        $service_provider_connections = $this->db
-            ->get_where('services_providers', ['id_users' => $provider_id])
-            ->result_array();
-
-        $service_ids = [];
-
-        foreach ($service_provider_connections as $service_provider_connection) {
-            $service_ids[] = (int) $service_provider_connection['id_services'];
-        }
-
-        return $service_ids;
     }
 
     /**
@@ -521,7 +521,7 @@ class Providers_model extends EA_Model
     public function save_working_plan_exception(
         int $provider_id,
         string $date,
-        array $working_plan_exception = null,
+        ?array $working_plan_exception = null,
     ): void {
         // Validate the working plan exception data.
 
@@ -678,7 +678,7 @@ class Providers_model extends EA_Model
      *
      * @return array Returns an array of providers.
      */
-    public function search(string $keyword, int $limit = null, int $offset = null, string $order_by = null): array
+    public function search(string $keyword, ?int $limit = null, ?int $offset = null, ?string $order_by = null): array
     {
         $role_id = $this->get_provider_role_id();
 
@@ -701,7 +701,7 @@ class Providers_model extends EA_Model
             ->group_end()
             ->limit($limit)
             ->offset($offset)
-            ->order_by($order_by)
+            ->order_by($this->quote_order_by($order_by))
             ->get()
             ->result_array();
 
@@ -763,7 +763,7 @@ class Providers_model extends EA_Model
             'state' => $provider['state'],
             'zip' => $provider['zip_code'],
             'notes' => $provider['notes'],
-            'is_private' => $provider['is_private'],
+            'isPrivate' => $provider['is_private'],
             'ldapDn' => $provider['ldap_dn'],
             'timezone' => $provider['timezone'],
             'language' => $provider['language'],
@@ -823,7 +823,7 @@ class Providers_model extends EA_Model
      * @param array $provider API resource.
      * @param array|null $base Base provider data to be overwritten with the provided values (useful for updates).
      */
-    public function api_decode(array &$provider, array $base = null): void
+    public function api_decode(array &$provider, ?array $base = null): void
     {
         $decoded_resource = $base ?: [];
 
