@@ -697,7 +697,10 @@ class Booking extends EA_Controller
                 $provider_id === ANY_PROVIDER ? $this->search_providers_by_service($service_id) : [$provider_id];
 
             $exclude_appointment_id = $manage_mode ? $appointment_id : null;
-
+            $providers_cache = [];
+            foreach ($provider_ids as $pid) {
+                $providers_cache[$pid] = $this->providers_model->find($pid);
+            }
             // Get the service record.
             $service = $this->services_model->find($service_id);
 
@@ -712,7 +715,8 @@ class Booking extends EA_Controller
 
                 // Finding at least one slot of availability.
                 foreach ($provider_ids as $current_provider_id) {
-                    $provider = $this->providers_model->find($current_provider_id);
+                    // $provider = $this->providers_model->find($current_provider_id);
+                    $provider = $providers_cache[$current_provider_id];
 
                     $available_hours = $this->availability->get_available_hours(
                         $current_date->format('Y-m-d'),

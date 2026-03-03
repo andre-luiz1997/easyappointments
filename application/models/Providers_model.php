@@ -647,10 +647,55 @@ class Providers_model extends EA_Model
             ->get()
             ->result_array();
 
+        // foreach ($providers as &$provider) {
+        //     $this->cast($provider);
+        //     $provider['settings'] = $this->get_settings($provider['id']);
+        //     $provider['services'] = $this->get_service_ids($provider['id']);
+        // }
+
+        // return $providers;
+        // Retorna cedo se nenhum provider for encontrado para evitar queries IN() vazias
+        if (empty($providers)) {
+            return [];
+        }
+
+        // Extrai os IDs dos providers encontrados
+        $provider_ids = array_column($providers, 'id');
+
+        // 1. Busca todos os 'settings' de uma vez (1 Query)
+        $settings_results = $this->db
+            ->where_in('id_users', $provider_ids)
+            ->get('user_settings')
+            ->result_array();
+
+        $settings_map = [];
+        foreach ($settings_results as $setting) {
+            $provider_id = (int) $setting['id_users'];
+            // Remove os campos sensíveis/desnecessários exatamente como o get_settings() original faz
+            unset($setting['id_users'], $setting['password'], $setting['salt']);
+            $settings_map[$provider_id] = $setting;
+        }
+
+        // 2. Busca todos os 'services' de uma vez (1 Query)
+        $services_results = $this->db
+            ->where_in('id_users', $provider_ids)
+            ->get('services_providers')
+            ->result_array();
+
+        $services_map = [];
+        foreach ($services_results as $service) {
+            $provider_id = (int) $service['id_users'];
+            // Agrupa os serviços em um array para cada provider e realiza o cast para inteiro
+            $services_map[$provider_id][] = (int) $service['id_services'];
+        }
+
+        // 3. Combina tudo no array final (Apenas alocação de memória no PHP, sem mais consultas)
         foreach ($providers as &$provider) {
-            $this->cast($provider);
-            $provider['settings'] = $this->get_settings($provider['id']);
-            $provider['services'] = $this->get_service_ids($provider['id']);
+            $this->cast($provider); // Cast original mantido
+            $provider_id = (int) $provider['id'];
+            
+            $provider['settings'] = $settings_map[$provider_id] ?? [];
+            $provider['services'] = $services_map[$provider_id] ?? [];
         }
 
         return $providers;
